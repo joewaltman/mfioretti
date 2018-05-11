@@ -1,0 +1,10 @@
+dist/
+node_modules/
+.env
+.node*
+contracts/
+.nyc_output
+coverage/
+.vscode/
+.watch.yml
+coverage.lcov

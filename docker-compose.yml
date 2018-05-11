@@ -1,0 +1,8 @@
+version: '2'
+services:
+  logger:
+    image: "f7564b536db5"
+    volumes:
+      - "./:/usr/src/app"
+    command: "yarn start"
+    restart: on-failure

@@ -1,0 +1,50 @@
+{
+  "name": "smart-contract-watch",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Neufund/smart-contract-watch.git",
+  "author": "",
+  "description": "Smart-Contract-Watch a service that watches smart contracts in the block chain and the transactions they conduct",
+  "license": "MIT",
+  "scripts": {
+    "build": "./node_modules/.bin/babel ./src --experimental --source-maps-inline -d ./dist",
+    "start": "./node_modules/.bin/babel  ./src --experimental --source-maps-inline -d ./dist && node ./dist ",
+    "lint": "eslint src",
+    "fix": "eslint src --fix",
+    "test": "nyc ./node_modules/mocha/bin/mocha --compilers js:babel-core/register 'test/**/*.spec.js?(x)'",
+    "coverage": "nyc report --reporter=text-lcov > coverage.lcov && ./node_modules/.bin/codecov"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-plugin-transform-class-properties": "^6.24.1",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-stage-0": "^6.24.1",
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "codecov": "^2.3.0",
+    "eslint": "^4.7.1",
+    "eslint-config-airbnb": "^15.1.0",
+    "eslint-config-airbnb-base": "^12.0.0",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-jsx-a11y": "^6.0.2",
+    "eslint-plugin-react": "^7.3.0",
+    "mocha": "^3.5.3",
+    "nyc": "^11.2.1",
+    "rimraf": "^2.6.2",
+    "sinon": "^4.0.0"
+  },
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "commander": "^2.11.0",
+    "dotenv": "^4.0.0",
+    "json2csv": "^4.1.2",
+    "moment": "^2.22.1",
+    "mysql": "^2.15.0",
+    "node-mysql-wrapper": "^2.9.3",
+    "request": "^2.82.0",
+    "request-promise": "^4.2.1",
+    "web3": "0.19.0",
+    "winston": "2.3.1",
+    "yamljs": "^0.3.0"
+  }
+}
