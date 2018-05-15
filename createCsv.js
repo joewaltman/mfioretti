@@ -16,7 +16,7 @@ let json = {}
 let dates = []
 
 let today = new Date()
-let priorDate = new Date().setDate(today.getDate() - 40)
+let priorDate = new Date().setDate(today.getDate() - 30)
 
 const CONTRACTS = {
     '0xb1690c08e213a35ed9bab7b318de14420fb57d8c': 'Sales Auction',
@@ -32,155 +32,132 @@ const CONTRACTS = {
     "0x1fc7bd85293f3982f40d52698df8d26be89360d6": 'EtheremonWorld',
 }
 
-//db.query('SELECT `metadata`,`event`,`timestamp` FROM Events LIMIT 10000', function(err, results, fields) {
-db.query('SELECT `metadata`,`timestamp` FROM Events WHERE `token` = "CK" AND `timestamp` >= ?', priorDate, function(err, results, fields) {
-    if (!err) {
-        results.forEach(result => {
-            let date = new Date(parseInt(result.timestamp)).toLocaleString().split(', ')[0]
-            if (dates.indexOf(date) === -1) dates.push(date)
+let limit = 2500
+let offset = 0
+let results = []
 
-            // Events
-            JSON.parse(result.metadata).decodedLogs.forEach(log => {
-                if (!json[CONTRACTS[log.address]]) json[CONTRACTS[log.address]] = {}
-                if (!json[CONTRACTS[log.address]][log.name]) json[CONTRACTS[log.address]][log.name] = {}
-                if (!json[CONTRACTS[log.address]][log.name][date]) json[CONTRACTS[log.address]][log.name][date] = {
-                    count: 0
-                }
+getData(limit, offset, results, [])
 
-                json[CONTRACTS[log.address]][log.name][date].count++
-            })
+async function getData(limit, offset, results, newRows) {
+    //base case
+    if (!newRows) {
+        let data = await fetch(limit, offset)
+        getData(limit, offset, results, data)
+    }
 
-            // Internal
-            let internalLog = JSON.parse(result.metadata).decodedInputDataResult
-            if (!json['internalFunctionCalls']) json['internalFunctionCalls'] = {}
-            if (!json['internalFunctionCalls'][internalLog.name]) json['internalFunctionCalls'][internalLog.name] = {}
-            if (!json['internalFunctionCalls'][internalLog.name][date]) json['internalFunctionCalls'][internalLog.name][date] = {
+    results = results.concat(newRows)
+    if (newRows.length > 0 && newRows.length < limit) {
+        formatData(results)
+    } else {
+        offset += newRows.length
+        let data = await fetch(limit, offset)
+        getData(limit, offset, results, data)
+    }
+}
+
+function fetch(limit, offset) {
+    return new Promise((resolve, reject) => {
+        db.query('SELECT `metadata`,`timestamp` FROM Events WHERE `token` = "CK" AND `timestamp` >= ? LIMIT ' + limit + ' OFFSET ' + offset, priorDate, function(err, results, fields) {
+            if (err) {
+                console.log("got an error fetching...")
+                console.log(err)
+            } else {
+                return resolve(results)
+            }
+        })
+    })
+}
+
+
+function formatData(results) {
+    for (var i = 0; i < results.length; i++) {
+        let date = new Date(parseInt(results[i].timestamp)).toLocaleString().split(' ')[0]
+        date = moment(date).format('M/D/YYYY')
+        if (dates.indexOf(date) === -1) dates.push(date)
+
+        // Events
+        JSON.parse(results[i].metadata).decodedLogs.forEach(log => {
+            if (!json[CONTRACTS[log.address]]) json[CONTRACTS[log.address]] = {}
+            if (!json[CONTRACTS[log.address]][log.name]) json[CONTRACTS[log.address]][log.name] = {}
+            if (!json[CONTRACTS[log.address]][log.name][date]) json[CONTRACTS[log.address]][log.name][date] = {
                 count: 0
             }
 
-            json['internalFunctionCalls'][internalLog.name][date].count++
-        })
-
-        // Set data
-        const fields = getTopColumn(json)
-        let allDates = fields.split('Event,')[1].split(',')
-
-        //get list of all dates
-        let listOfAllDatesInBetween = getDates(new Date(allDates[0]), new Date(allDates[allDates.length - 1]))
-        let csvData = generateCsv(json)
-
-        console.log(fields)
-        csvData.forEach(str => {
-            console.log(str)
-        })
-
-        function generateCsv(json) {
-
-            let csvData = []
-            Object.keys(json).forEach((contract, index) => {
-
-                let newRow = ""
-                if (index) newRow += "\n"
-
-                Object.keys(json[contract]).forEach((event, eventIndex) => {
-                    if (!eventIndex) {
-                        newRow += contract + ","
-                    } else {
-                        newRow = ","
-                    }
-
-                    // Add the event
-                    newRow += event + ','
-
-                    // Add the counts
-                    let counts = []
-
-                    listOfAllDatesInBetween.forEach(initialDate => {
-                        let dateFound = null
-
-                        Object.keys(json[contract][event]).forEach(date => {
-                            if (date === initialDate) {
-                                dateFound = date
-                            }
-                        })
-
-                        if (dateFound) {
-                            counts.push(json[contract][event][dateFound].count)
-                        } else {
-                            counts.push(0)
-                        }
-
-                    })
-
-                    newRow += counts.join(',')
-                    csvData.push(newRow)
-                })
-            })
-            return csvData
-        }
-
-
-        return process.exit()
-
-
-        /*
-
-        Object.keys(json).forEach(contractName => {
-            if (contractName != 'internalFunctionCalls') {
-                console.log("\n\n")
-                console.log("******************************************************")
-                console.log("*********** Data for " + contractName + " ************")
-                Object.keys(json[contractName]).forEach(event => {
-                    Object.keys(json[contractName][event]).forEach(date => {
-                        console.log(event + " happened " + json[contractName][event][date].count + " on " + date)
-                    })
-                })
-                console.log("****************************************************")
-            }
+            json[CONTRACTS[log.address]][log.name][date].count++
         })
 
         // Internal
-
-        console.log("\n\n")
-        console.log("*****************************************************")
-        console.log("*********** Data - Internal Transactions ************")
-        Object.keys(json['internalFunctionCalls']).forEach(key => {
-            Object.keys(json['internalFunctionCalls'][key]).forEach(date => {
-                console.log(key + " happened " + json['internalFunctionCalls'][key][date].count + " times on " + date)
-            })
-            console.log("*************************************************")
-        })
-
-        return process.exit()
-
-        */
-
-        // const fields = [...dates]
-        // const values = []
-
-        // Object.keys(json).map(contractName => {
-        //     Object.keys(json[contractName]).map(eventName => {
-        //         values.push({
-        //             Day: 'asd',
-        //             Event: eventName,
-        //             Count: json[contractName][eventName].count
-        //         })
-        //     })
-        // })
-
-        // const json2csvParser = new Json2csvParser({ fields });
-        // const csv = json2csvParser.parse(json);
-        // console.log(csv)
-        // process.exit()
-
-    } else {
-        if (err.code === 'ER_DUP_ENTRY') {
-            console.log("skipped 1 duplicate entry")
-        } else {
-            console.log("error fetching: ", err)
+        let internalLog = JSON.parse(results[i].metadata).decodedInputDataResult
+        if (!json['internalFunctionCalls']) json['internalFunctionCalls'] = {}
+        if (!json['internalFunctionCalls'][internalLog.name]) json['internalFunctionCalls'][internalLog.name] = {}
+        if (!json['internalFunctionCalls'][internalLog.name][date]) json['internalFunctionCalls'][internalLog.name][date] = {
+            count: 0
         }
+
+        json['internalFunctionCalls'][internalLog.name][date].count++
     }
-});
+
+    // Set data
+    const fields = getTopColumn(json)
+    let allDates = fields.split('Event,')[1].split(',')
+
+    //get list of all dates
+    let listOfAllDatesInBetween = getDates(new Date(allDates[0]), new Date(allDates[allDates.length - 1]))
+    let csvData = generateCsv(json)
+
+    console.log(fields)
+    csvData.forEach(str => {
+        console.log(str)
+    })
+
+    function generateCsv(json) {
+
+        let csvData = []
+        Object.keys(json).forEach((contract, index) => {
+
+            let newRow = ""
+            if (index) newRow += "\n"
+
+            Object.keys(json[contract]).forEach((event, eventIndex) => {
+                if (!eventIndex) {
+                    newRow += contract + ","
+                } else {
+                    newRow = ","
+                }
+
+                // Add the event
+                newRow += event + ','
+
+                // Add the counts
+                let counts = []
+
+                listOfAllDatesInBetween.forEach(initialDate => {
+                    let dateFound = null
+
+                    Object.keys(json[contract][event]).forEach(date => {
+                        if (date === initialDate) {
+                            dateFound = date
+                        }
+                    })
+
+                    if (dateFound) {
+                        counts.push(json[contract][event][dateFound].count)
+                    } else {
+                        counts.push(0)
+                    }
+
+                })
+
+                newRow += counts.join(',')
+                csvData.push(newRow)
+            })
+        })
+        return csvData
+    }
+
+
+    return process.exit()
+}
 
 /**
  * Get the top column of the csv file
@@ -212,6 +189,161 @@ function getDates(startDate, stopDate) {
     }
     return dateArray;
 }
+
+
+
+// return
+// //db.query('SELECT `metadata`,`event`,`timestamp` FROM Events LIMIT 10000', function(err, results, fields) {
+// db.query('SELECT `metadata`,`timestamp` FROM Events WHERE `token` = "CK" AND `timestamp` >= ?', priorDate, function(err, results, fields) {
+//     if (!err) {
+//         console.log("GOT THE RESULTS: ", results.length)
+//         results.forEach(result => {
+//             let date = new Date(parseInt(result.timestamp)).toLocaleString().split(', ')[0]
+//             console.log("date: ", date)
+//             if (dates.indexOf(date) === -1) dates.push(date)
+
+//             // Events
+//             JSON.parse(result.metadata).decodedLogs.forEach(log => {
+//                 if (!json[CONTRACTS[log.address]]) json[CONTRACTS[log.address]] = {}
+//                 if (!json[CONTRACTS[log.address]][log.name]) json[CONTRACTS[log.address]][log.name] = {}
+//                 if (!json[CONTRACTS[log.address]][log.name][date]) json[CONTRACTS[log.address]][log.name][date] = {
+//                     count: 0
+//                 }
+
+//                 json[CONTRACTS[log.address]][log.name][date].count++
+//             })
+
+//             // Internal
+//             let internalLog = JSON.parse(result.metadata).decodedInputDataResult
+//             if (!json['internalFunctionCalls']) json['internalFunctionCalls'] = {}
+//             if (!json['internalFunctionCalls'][internalLog.name]) json['internalFunctionCalls'][internalLog.name] = {}
+//             if (!json['internalFunctionCalls'][internalLog.name][date]) json['internalFunctionCalls'][internalLog.name][date] = {
+//                 count: 0
+//             }
+
+//             json['internalFunctionCalls'][internalLog.name][date].count++
+//         })
+
+//         // Set data
+//         const fields = getTopColumn(json)
+//         let allDates = fields.split('Event,')[1].split(',')
+
+//         //get list of all dates
+//         let listOfAllDatesInBetween = getDates(new Date(allDates[0]), new Date(allDates[allDates.length - 1]))
+//         let csvData = generateCsv(json)
+
+//         console.log(fields)
+//         csvData.forEach(str => {
+//             console.log(str)
+//         })
+
+//         function generateCsv(json) {
+
+//             let csvData = []
+//             Object.keys(json).forEach((contract, index) => {
+
+//                 let newRow = ""
+//                 if (index) newRow += "\n"
+
+//                 Object.keys(json[contract]).forEach((event, eventIndex) => {
+//                     if (!eventIndex) {
+//                         newRow += contract + ","
+//                     } else {
+//                         newRow = ","
+//                     }
+
+//                     // Add the event
+//                     newRow += event + ','
+
+//                     // Add the counts
+//                     let counts = []
+
+//                     listOfAllDatesInBetween.forEach(initialDate => {
+//                         let dateFound = null
+
+//                         Object.keys(json[contract][event]).forEach(date => {
+//                             if (date === initialDate) {
+//                                 dateFound = date
+//                             }
+//                         })
+
+//                         if (dateFound) {
+//                             counts.push(json[contract][event][dateFound].count)
+//                         } else {
+//                             counts.push(0)
+//                         }
+
+//                     })
+
+//                     newRow += counts.join(',')
+//                     csvData.push(newRow)
+//                 })
+//             })
+//             return csvData
+//         }
+
+
+//         return process.exit()
+
+
+//         /*
+
+//         Object.keys(json).forEach(contractName => {
+//             if (contractName != 'internalFunctionCalls') {
+//                 console.log("\n\n")
+//                 console.log("******************************************************")
+//                 console.log("*********** Data for " + contractName + " ************")
+//                 Object.keys(json[contractName]).forEach(event => {
+//                     Object.keys(json[contractName][event]).forEach(date => {
+//                         console.log(event + " happened " + json[contractName][event][date].count + " on " + date)
+//                     })
+//                 })
+//                 console.log("****************************************************")
+//             }
+//         })
+
+//         // Internal
+
+//         console.log("\n\n")
+//         console.log("*****************************************************")
+//         console.log("*********** Data - Internal Transactions ************")
+//         Object.keys(json['internalFunctionCalls']).forEach(key => {
+//             Object.keys(json['internalFunctionCalls'][key]).forEach(date => {
+//                 console.log(key + " happened " + json['internalFunctionCalls'][key][date].count + " times on " + date)
+//             })
+//             console.log("*************************************************")
+//         })
+
+//         return process.exit()
+
+//         */
+
+//         // const fields = [...dates]
+//         // const values = []
+
+//         // Object.keys(json).map(contractName => {
+//         //     Object.keys(json[contractName]).map(eventName => {
+//         //         values.push({
+//         //             Day: 'asd',
+//         //             Event: eventName,
+//         //             Count: json[contractName][eventName].count
+//         //         })
+//         //     })
+//         // })
+
+//         // const json2csvParser = new Json2csvParser({ fields });
+//         // const csv = json2csvParser.parse(json);
+//         // console.log(csv)
+//         // process.exit()
+
+//     } else {
+//         if (err.code === 'ER_DUP_ENTRY') {
+//             console.log("skipped 1 duplicate entry")
+//         } else {
+//             console.log("error fetching: ", err)
+//         }
+//     }
+// });
 
 
 // {
