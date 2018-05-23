@@ -123,7 +123,7 @@ export default (watchPath) => {
             .parse(process.argv);
     }
     if (typeof program === 'undefined') { throw new Error(noArgsErrorMsg); }
-    const from = program.saveState ? handleSaveSate(program.saveState, program.from) : program.from;
+    const from = program.saveState ? 
     const saveState = program.saveState ?
         path.join(path.resolve(program.saveState), saveStateFileName) : null;
     const blockConfirmations = !isNaN(parseParamToNumStrict(program.blockConfirmations)) ?
